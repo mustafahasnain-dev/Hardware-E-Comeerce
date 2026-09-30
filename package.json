@@ -1,0 +1,20 @@
+{
+  "name": "hardware-e-commerce",
+  "version": "1.0.0",
+  "description": "Product catalogue scraped from imsons.com.pk into Excel, displayed in an HTML table",
+  "main": "server.js",
+  "scripts": {
+    "scrape": "node scripts/scrape.js",
+    "excel": "node scripts/build-excel.js",
+    "build": "npm run scrape && npm run excel",
+    "start": "node server.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "exceljs": "^4.4.0",
+    "html-to-text": "^10.0.1",
+    "sharp": "^0.35.5"
+  },
+  "private": true
+}

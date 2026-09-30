@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Product Catalogue</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --surface: #ffffff;
+    --surface-2: #f1f3f6;
+    --border: #e2e5ea;
+    --text: #1a1d23;
+    --muted: #646b78;
+    --accent: #d9480f;
+    --link: #1d5fd1;
+    --ok: #1f7a3f;
+    --warn: #b42318;
+    --strike: #8a909c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111316;
+      --surface: #181b20;
+      --surface-2: #1f232a;
+      --border: #2c313a;
+      --text: #e7e9ed;
+      --muted: #9aa1ad;
+      --accent: #ff8a4c;
+      --link: #7aa8ff;
+      --ok: #5cc98a;
+      --warn: #ff8b80;
+      --strike: #767d89;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  .wrap { max-width: 1400px; margin: 0 auto; padding: 24px 16px 48px; }
+  header h1 { margin: 0; font-size: 22px; letter-spacing: -0.01em; }
+  header p { margin: 4px 0 0; color: var(--muted); }
+
+  .controls {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    margin: 20px 0 12px;
+  }
+  .controls input, .controls select {
+    height: 36px; padding: 0 10px;
+    border: 1px solid var(--border); border-radius: 6px;
+    background: var(--surface); color: var(--text); font: inherit;
+  }
+  .controls input[type="search"] { flex: 1 1 260px; min-width: 0; }
+  .controls select { flex: 0 1 auto; max-width: 100%; }
+  .count { color: var(--muted); margin-left: auto; white-space: nowrap; }
+
+  .table-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border); border-radius: 8px;
+    overflow-x: auto;
+  }
+  table { width: 100%; border-collapse: collapse; min-width: 960px; }
+  th, td { padding: 10px 12px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--border); }
+  th {
+    position: sticky; top: 0; z-index: 1;
+    background: var(--surface-2); color: var(--muted);
+    font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+    white-space: nowrap;
+  }
+  tbody tr:hover { background: var(--surface-2); }
+  td.num { color: var(--muted); font-variant-numeric: tabular-nums; width: 1%; }
+  td.name { min-width: 240px; font-weight: 500; }
+  td.name a { color: inherit; text-decoration: none; }
+  td.name a:hover { color: var(--link); text-decoration: underline; }
+  td.sku { font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; white-space: nowrap; }
+  td.cat { color: var(--muted); min-width: 140px; }
+  td.price { white-space: nowrap; font-variant-numeric: tabular-nums; text-align: right; }
+  th.price { text-align: right; }
+  .price .now { font-weight: 600; }
+  .price .was { display: block; color: var(--strike); text-decoration: line-through; font-size: 12.5px; }
+  .price .na { color: var(--muted); font-style: italic; }
+  .stock { white-space: nowrap; font-size: 12.5px; font-weight: 500; }
+  .stock.in { color: var(--ok); }
+  .stock.out { color: var(--warn); }
+  td.desc { min-width: 320px; max-width: 520px; }
+  .desc-text {
+    white-space: pre-line; color: var(--muted);
+    display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .desc-text.open { display: block; }
+  .toggle {
+    margin-top: 4px; padding: 0; border: 0; background: none;
+    color: var(--link); font: inherit; font-size: 12.5px; cursor: pointer;
+  }
+  td.img a { color: var(--link); white-space: nowrap; }
+  .empty { padding: 40px; text-align: center; color: var(--muted); }
+
+  .pager { display: flex; gap: 6px; justify-content: center; align-items: center; margin-top: 16px; flex-wrap: wrap; }
+  .pager button {
+    min-width: 36px; height: 34px; padding: 0 10px;
+    border: 1px solid var(--border); border-radius: 6px;
+    background: var(--surface); color: var(--text); font: inherit; cursor: pointer;
+  }
+  .pager button[disabled] { opacity: 0.4; cursor: default; }
+  .pager span { color: var(--muted); padding: 0 6px; }
+
+  .status { padding: 48px 16px; text-align: center; color: var(--muted); }
+  .status label {
+    display: inline-block; margin-top: 12px; padding: 8px 14px;
+    border: 1px solid var(--border); border-radius: 6px; background: var(--surface);
+    color: var(--text); cursor: pointer;
+  }
+  .status input { display: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Product Catalogue</h1>
+    <p id="subtitle">Loaded from <code>data/products.xlsx</code></p>
+  </header>
+
+  <div id="status" class="status">Loading products from Excel…</div>
+
+  <div id="app" hidden>
+    <div class="controls">
+      <input id="q" type="search" placeholder="Search name, SKU or description…" autocomplete="off">
+      <select id="cat" aria-label="Category"><option value="">All categories</option></select>
+      <select id="stock" aria-label="Stock">
+        <option value="">Any stock</option>
+        <option value="In stock">In stock</option>
+        <option value="Out of stock">Out of stock</option>
+      </select>
+      <select id="sort" aria-label="Sort">
+        <option value="">Default order</option>
+        <option value="name">Name A–Z</option>
+        <option value="price-asc">Price: low to high</option>
+        <option value="price-desc">Price: high to low</option>
+      </select>
+      <select id="size" aria-label="Rows per page">
+        <option>25</option><option selected>50</option><option>100</option><option>250</option>
+      </select>
+      <span class="count" id="count"></span>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Product name</th>
+            <th>SKU</th>
+            <th>Category</th>
+            <th class="price">Price (PKR)</th>
+            <th>Stock</th>
+            <th>Description</th>
+            <th>Image link</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <nav class="pager" id="pager"></nav>
+  </div>
+</div>
+
+<script>
+const EXCEL_URL = 'data/products.xlsx';
+
+let products = [];
+let view = [];
+let page = 1;
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fmt = (n) => Number(n).toLocaleString('en-PK');
+const num = (v) => (v === '' || v == null || isNaN(Number(v)) ? null : Number(v));
+
+// Map the Excel columns (see scripts/build-excel.js) to plain objects.
+function readWorkbook(buffer) {
+  const wb = XLSX.read(buffer, { type: 'array' });
+  const sheet = wb.Sheets['Products'] || wb.Sheets[wb.SheetNames[0]];
+  return XLSX.utils.sheet_to_json(sheet, { defval: '' }).map((r) => ({
+    id: r['ID'],
+    name: String(r['Product Name']),
+    sku: String(r['SKU']),
+    category: String(r['Category']),
+    price: num(r['Price (PKR)']),
+    maxPrice: num(r['Max Price (PKR)']),
+    regularPrice: num(r['Regular Price (PKR)']),
+    onSale: r['On Sale'] === 'Yes',
+    stock: r['Stock'],
+    shortDescription: String(r['Short Description']),
+    description: String(r['Description']),
+    imageUrl: r['Image URL'],
+    productUrl: r['Product URL'],
+  })).map((p) => ({ ...p, haystack: `${p.name} ${p.sku} ${p.category} ${p.shortDescription} ${p.description}`.toLowerCase() }));
+}
+
+function start(buffer) {
+  products = readWorkbook(buffer);
+
+  const cats = new Set();
+  products.forEach((p) => p.category.split(', ').filter(Boolean).forEach((c) => cats.add(c)));
+  $('cat').insertAdjacentHTML('beforeend',
+    [...cats].sort((a, b) => a.localeCompare(b)).map((c) => `<option>${esc(c)}</option>`).join(''));
+
+  $('subtitle').textContent = `${fmt(products.length)} products loaded from data/products.xlsx`;
+  $('status').hidden = true;
+  $('app').hidden = false;
+  apply();
+}
+
+function apply() {
+  const q = $('q').value.trim().toLowerCase();
+  const terms = q ? q.split(/\s+/) : [];
+  const cat = $('cat').value;
+  const stock = $('stock').value;
+  const sort = $('sort').value;
+
+  view = products.filter((p) =>
+    (!cat || p.category.split(', ').includes(cat)) &&
+    (!stock || p.stock === stock) &&
+    terms.every((t) => p.haystack.includes(t)));
+
+  const byPrice = (dir) => (a, b) => {
+    if (a.price == null) return 1;
+    if (b.price == null) return -1;
+    return dir * (a.price - b.price);
+  };
+  if (sort === 'name') view.sort((a, b) => a.name.localeCompare(b.name));
+  if (sort === 'price-asc') view.sort(byPrice(1));
+  if (sort === 'price-desc') view.sort(byPrice(-1));
+
+  page = 1;
+  render();
+}
+
+function priceCell(p) {
+  if (p.price == null) return '<span class="na">On request</span>';
+  let html = `<span class="now">${fmt(p.price)}${p.maxPrice ? ` – ${fmt(p.maxPrice)}` : ''}</span>`;
+  if (p.onSale && p.regularPrice && p.regularPrice > p.price) html += `<span class="was">${fmt(p.regularPrice)}</span>`;
+  return html;
+}
+
+function render() {
+  const size = Number($('size').value);
+  const pages = Math.max(1, Math.ceil(view.length / size));
+  page = Math.min(page, pages);
+  const startIdx = (page - 1) * size;
+  const slice = view.slice(startIdx, startIdx + size);
+
+  $('count').textContent = view.length === products.length
+    ? `${fmt(products.length)} products`
+    : `${fmt(view.length)} of ${fmt(products.length)} products`;
+
+  $('rows').innerHTML = slice.length ? slice.map((p, i) => {
+    const desc = p.shortDescription || p.description;
+    const hasMore = p.description && p.description !== desc;
+    return `<tr>
+      <td class="num">${startIdx + i + 1}</td>
+      <td class="name">${p.productUrl ? `<a href="${esc(p.productUrl)}" target="_blank" rel="noopener">${esc(p.name)}</a>` : esc(p.name)}</td>
+      <td class="sku">${esc(p.sku)}</td>
+      <td class="cat">${esc(p.category)}</td>
+      <td class="price">${priceCell(p)}</td>
+      <td><span class="stock ${p.stock === 'In stock' ? 'in' : 'out'}">${esc(p.stock)}</span></td>
+      <td class="desc">
+        <div class="desc-text" data-short="${esc(desc)}" data-full="${esc(p.description)}">${esc(desc)}</div>
+        ${desc ? `<button class="toggle" type="button" data-more="${hasMore ? 1 : 0}">Show more</button>` : ''}
+      </td>
+      <td class="img">${p.imageUrl ? `<a href="${esc(p.imageUrl)}" target="_blank" rel="noopener">Open image ↗</a>` : '—'}</td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="8" class="empty">No products match your filters.</td></tr>';
+
+  // Hide "Show more" where the text already fits and there is no longer description.
+  $('rows').querySelectorAll('.toggle').forEach((btn) => {
+    const text = btn.previousElementSibling;
+    if (btn.dataset.more === '0' && text.scrollHeight <= text.clientHeight + 1) btn.remove();
+  });
+
+  renderPager(pages);
+}
+
+function renderPager(pages) {
+  if (pages <= 1) { $('pager').innerHTML = ''; return; }
+  const btn = (label, target, disabled) =>
+    `<button type="button" data-page="${target}" ${disabled ? 'disabled' : ''}>${label}</button>`;
+  $('pager').innerHTML =
+    btn('« First', 1, page === 1) +
+    btn('‹ Prev', page - 1, page === 1) +
+    `<span>Page ${page} of ${pages}</span>` +
+    btn('Next ›', page + 1, page === pages) +
+    btn('Last »', pages, page === pages);
+}
+
+$('rows').addEventListener('click', (e) => {
+  const btn = e.target.closest('.toggle');
+  if (!btn) return;
+  const text = btn.previousElementSibling;
+  const open = !text.classList.contains('open');
+  text.classList.toggle('open', open);
+  text.textContent = open && btn.dataset.more === '1' ? text.dataset.full : text.dataset.short;
+  btn.textContent = open ? 'Show less' : 'Show more';
+});
+
+$('pager').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-page]');
+  if (!btn || btn.disabled) return;
+  page = Number(btn.dataset.page);
+  render();
+  document.querySelector('.table-wrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+
+let timer;
+$('q').addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(apply, 150); });
+['cat', 'stock', 'sort'].forEach((id) => $(id).addEventListener('change', apply));
+$('size').addEventListener('change', () => { page = 1; render(); });
+
+// Browsers block fetch() on file:// pages, so fall back to letting the user pick the file.
+function showPicker(reason) {
+  $('status').innerHTML = `${esc(reason)}<br>
+    <label>Choose products.xlsx<input type="file" accept=".xlsx"></label>`;
+  $('status').querySelector('input').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    $('status').textContent = 'Reading Excel file…';
+    start(await file.arrayBuffer());
+  });
+}
+
+fetch(EXCEL_URL)
+  .then((res) => { if (!res.ok) throw new Error(`HTTP ${res.status}`); return res.arrayBuffer(); })
+  .then(start)
+  .catch(() => showPicker('Could not load data/products.xlsx automatically (run "npm start" to serve this page), or pick the file below.'));
+</script>
+</body>
+</html>
